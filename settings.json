@@ -6,8 +6,8 @@
     "type": "offline"
   },
   "server": {
-    "ip": "your.server.ip",
-    "port": 25565,
+    "ip": "SharpnessSMP00.aternos.me",
+    "port": 59889,
     "version": "",
     "try-creative": false
   },
