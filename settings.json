@@ -1,12 +1,12 @@
 {
-  "name": "LLO",
+  "name": "Cloudbyali",
   "bot-account": {
-    "username": "bad",
+    "username": "cloudbyali",
     "password": "",
     "type": "offline"
   },
   "server": {
-    "ip": "nope",
+    "ip": "SharpnessSMP00.aternos.me",
     "port": 59889,
     "version": "",
     "try-creative": false
