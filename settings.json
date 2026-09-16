@@ -1,9 +1,9 @@
 {
-  "name": "Cloudbyali",
+  "name": "meow",
   "bot-account": {
-    "username": "cloudbyali",
+    "username": "meow",
     "password": "",
-    "type": "offline"
+    "type": "online"
   },
   "server": {
     "ip": "SharpnessSMP00.aternos.me",
