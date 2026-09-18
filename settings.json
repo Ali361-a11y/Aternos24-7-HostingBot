@@ -1,87 +1,244 @@
-{
-  "name": "nopelose",
-  "bot-account": {
-    "username": "nopelose",
-    "password": "26.2",
-    "type": "online"
-  },
-  "server": {
-    "ip": "SharpnessSMP00.aternos.me",
-    "port": 59889,
-    "version": "",
-    "try-creative": false
-  },
-  "position": {
-    "enabled": true,
-    "x": 0,
-    "y": 100,
-    "z": 0
-  },
-  "utils": {
-    "auto-auth": {
-      "enabled": true,
-      "password": "YourAuthPassword"
-    },
-    "anti-afk": {
-      "enabled": true,
-      "sneak": true
-    },
-    "chat-messages": {
-      "enabled": true,
-      "repeat": true,
-      "repeat-delay": 120,
-      "messages": [
-        "I'm a regular player",
-        "I like to play Minecraft!"
-      ]
-    },
-    "chat-log": true,
-    "auto-reconnect": true,
-    "auto-reconnect-delay": 2000,
-    "max-reconnect-delay": 120000
-  },
-  "movement": {
-    "enabled": true,
-    "circle-walk": {
-      "enabled": true,
-      "radius": 4,
-      "speed": 3000
-    },
-    "look-around": {
-      "enabled": true,
-      "interval": 5000
-    },
-    "random-jump": {
-      "enabled": true,
-      "interval": 10000
-    }
-  },
-  "modules": {
-    "avoidMobs": true,
-    "combat": true,
-    "beds": false,
-    "chat": true,
-    "console-commands": true
-  },
-  "combat": {
-    "attack-mobs": true,
-    "auto-eat": true
-  },
-  "beds": {
-    "pick-up-day": false,
-    "place-night": false
-  },
-  "discord": {
-    "enabled": false,
-    "webhookUrl": "YOUR_DISCORD_WEBHOOK_URL_HERE",
-    "events": {
-      "connect": true,
-      "disconnect": true,
-      "chat": false
-    }
-  },
-  "chat": {
-    "respond": true,
-    "tpWhitelist": ["YourMinecraftUsername"]
+const mineflayer = require('mineflayer')
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
+const { GoalNear } = goals
+
+const bot = mineflayer.createBot({
+  host: 'SharpnessSMP00.aternos.me',
+  port: 59889,
+  username: 'YourBotName',
+  auth: 'offline'
+  // version: '26.2' // DON'T add this until your installed Mineflayer build supports 26.2
+})
+
+bot.loadPlugin(pathfinder)
+
+let busy = false
+
+bot.once('spawn', () => {
+  console.log('Bot joined the server!')
+
+  const mcData = require('minecraft-data')(bot.version)
+  const movements = new Movements(bot, mcData)
+
+  movements.canDig = false
+  movements.allow1by1towers = false
+
+  bot.pathfinder.setMovements(movements)
+
+  // Start AI
+  setInterval(mainAI, 1500)
+})
+
+// -------------------------
+// MAIN AI
+// -------------------------
+
+async function mainAI() {
+  if (!bot.entity || busy) return
+
+  // Eat when hungry
+  if (bot.food !== undefined && bot.food <= 14) {
+    await eatFood()
+    return
   }
+
+  // Find nearby hostile mob
+  const mob = findMob()
+
+  if (mob) {
+    await fightMob(mob)
+    return
+  }
+
+  // Nothing to fight -> walk around
+  randomWalk()
+}
+
+// -------------------------
+// FIND MOB
+// -------------------------
+
+function findMob() {
+  const hostileMobs = [
+    'zombie',
+    'skeleton',
+    'spider',
+    'creeper',
+    'witch',
+    'husk',
+    'drowned',
+    'stray',
+    'pillager',
+    'vindicator',
+    'phantom'
+  ]
+
+  let closest = null
+  let closestDistance = 12
+
+  for (const id in bot.entities) {
+    const entity = bot.entities[id]
+
+    if (!entity || !entity.position) continue
+
+    if (!hostileMobs.includes(entity.name)) continue
+
+    const distance = bot.entity.position.distanceTo(entity.position)
+
+    if (distance < closestDistance) {
+      closest = entity
+      closestDistance = distance
+    }
+  }
+
+  return closest
+}
+
+// -------------------------
+// FIGHT
+// -------------------------
+
+async function fightMob(mob) {
+  if (!mob || !mob.position) return
+
+  busy = true
+
+  try {
+    console.log('Fighting:', mob.name)
+
+    bot.pathfinder.setGoal(
+      new GoalNear(
+        mob.position.x,
+        mob.position.y,
+        mob.position.z,
+        2
+      )
+    )
+
+    const start = Date.now()
+
+    while (
+      mob.isValid &&
+      bot.entity &&
+      Date.now() - start < 15000
+    ) {
+      if (bot.food <= 10) {
+        await eatFood()
+        break
+      }
+
+      const distance = bot.entity.position.distanceTo(mob.position)
+
+      if (distance <= 3) {
+        bot.lookAt(mob.position.offset(0, 1, 0), true)
+
+        bot.attack(mob)
+        await sleep(600)
+      } else {
+        bot.pathfinder.setGoal(
+          new GoalNear(
+            mob.position.x,
+            mob.position.y,
+            mob.position.z,
+            2
+          )
+        )
+      }
+
+      await sleep(100)
+    }
+  } catch (err) {
+    console.log('Fight error:', err.message)
+  }
+
+  bot.pathfinder.setGoal(null)
+  busy = false
+}
+
+// -------------------------
+// EAT
+// -------------------------
+
+async function eatFood() {
+  const foodNames = [
+    'bread',
+    'cooked_beef',
+    'cooked_porkchop',
+    'cooked_chicken',
+    'cooked_mutton',
+    'cooked_rabbit',
+    'baked_potato',
+    'golden_carrot',
+    'apple',
+    'carrot',
+    'potato'
+  ]
+
+  const food = bot.inventory.items().find(item =>
+    foodNames.includes(item.name)
+  )
+
+  if (!food) {
+    console.log('No food in inventory!')
+    return
+  }
+
+  try {
+    console.log('Eating:', food.name)
+
+    await bot.equip(food, 'hand')
+    await bot.consume()
+
+    console.log('Finished eating')
+  } catch (err) {
+    console.log('Eating error:', err.message)
+  }
+}
+
+// -------------------------
+// RANDOM WALK
+// -------------------------
+
+function randomWalk() {
+  if (!bot.entity) return
+
+  const x =
+    bot.entity.position.x +
+    Math.floor(Math.random() * 21) - 10
+
+  const z =
+    bot.entity.position.z +
+    Math.floor(Math.random() * 21) - 10
+
+  const y = bot.entity.position.y
+
+  console.log('Walking...')
+
+  bot.pathfinder.setGoal(
+    new GoalNear(x, y, z, 2)
+  )
+}
+
+// -------------------------
+// RECONNECT
+// -------------------------
+
+bot.on('end', () => {
+  console.log('Bot disconnected. Restart the program to reconnect.')
+})
+
+bot.on('error', err => {
+  console.log('Bot error:', err.message)
+})
+
+bot.on('kicked', reason => {
+  console.log('Kicked:', reason)
+})
+
+// -------------------------
+// HELPERS
+// -------------------------
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
